@@ -23,6 +23,10 @@ tcp_keepalive_settings_cgo(struct tcp_pcb *pcb)
 	pcb->so_options |= SOF_KEEPALIVE;
 #endif
 }
+
+void tcp_arg_cgo(struct tcp_pcb *pcb, uintptr_t ptr) {
+	tcp_arg(pcb, (void*)ptr);
+}
 */
 import "C"
 import (
@@ -38,6 +42,8 @@ import (
 )
 
 type tcpConnState uint
+
+var tcpConns sync.Map
 
 const (
 	// tcpNewConn is the initial state.
@@ -83,7 +89,6 @@ type tcpConn struct {
 	handler       TCPConnHandler
 	remoteAddr    *net.TCPAddr
 	localAddr     *net.TCPAddr
-	connKey       unsafe.Pointer
 	state         tcpConnState
 	sndPipeReader *nio.PipeReader
 	sndPipeWriter *nio.PipeWriter
@@ -111,17 +116,13 @@ func newTCPConn(pcb *C.struct_tcp_pcb, handler TCPConnHandler) (TCPConn, error) 
 		handler:       handler,
 		localAddr:     ParseTCPAddr(ipAddrNTOA(pcb.remote_ip), uint16(pcb.remote_port)),
 		remoteAddr:    ParseTCPAddr(ipAddrNTOA(pcb.local_ip), uint16(pcb.local_port)),
-		connKey:       nil,
 		state:         tcpNewConn,
 		sndPipeReader: pipeReader,
 		sndPipeWriter: pipeWriter,
 	}
 
-	// Associate conn with key and save to the global map.
-	identifierPtr := GoPointerSave(conn)
-	conn.SetConnKey(identifierPtr)
-	// Pass the pointer identifier subsequent tcp callbacks.
-	C.tcp_arg(pcb, identifierPtr)
+	C.tcp_arg_cgo(pcb, C.uintptr_t(uintptr(unsafe.Pointer(conn))))
+	tcpConns.Store(conn, true)
 
 	// Connecting remote host could take some time, do it in another goroutine
 	// to prevent blocking the lwip thread.
@@ -157,11 +158,6 @@ func (conn *tcpConn) SetReadDeadline(t time.Time) error {
 	return nil
 }
 func (conn *tcpConn) SetWriteDeadline(t time.Time) error {
-	return nil
-}
-
-func (conn *tcpConn) SetConnKey(p unsafe.Pointer) error {
-	conn.connKey = p
 	return nil
 }
 
@@ -508,7 +504,7 @@ func (conn *tcpConn) release() {
 	lwipMutex.Lock()
 	defer lwipMutex.Unlock()
 
-	GoPointerUnref(conn.connKey)
+	tcpConns.Delete(conn)
 
 	conn.sndPipeWriter.Close()
 	conn.sndPipeReader.Close()

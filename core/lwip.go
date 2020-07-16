@@ -264,7 +264,7 @@ func (s *lwipStack) closeInternal() {
 
 func (s *lwipStack) Close(t LWIPSysCheckTimeoutsClosingType) error {
 	if s.GetRunningStatus() {
-		tcpConns.Range(func(_, c interface{}) bool {
+		tcpConns.Range(func(c, _ interface{}) bool {
 			c.(*tcpConn).Abort()
 			return true
 		})
