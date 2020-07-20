@@ -107,7 +107,6 @@ func newTCPConn(pcb *C.struct_tcp_pcb, handler TCPConnHandler) (TCPConn, error) 
 	setTCPRecvCallback(pcb)
 	setTCPSentCallback(pcb)
 	setTCPErrCallback(pcb)
-	setTCPPollCallback(pcb, C.u8_t(TCP_POLL_INTERVAL))
 
 	buf := buffer.New(0xffff)
 	pipeReader, pipeWriter := nio.Pipe(buf)
@@ -445,7 +444,6 @@ func (conn *tcpConn) closeInternal() error {
 	C.tcp_recv(conn.pcb, nil)
 	C.tcp_sent(conn.pcb, nil)
 	C.tcp_err(conn.pcb, nil)
-	C.tcp_poll(conn.pcb, nil, 0)
 
 	// FIXME Handle error.
 	err := C.tcp_close(conn.pcb)

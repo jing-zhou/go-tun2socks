@@ -153,19 +153,3 @@ func tcpErrFn(arg unsafe.Pointer, err C.err_t) {
 		conn.Err(errors.New(fmt.Sprintf("lwip error code %v", int(err))))
 	}
 }
-
-//export tcpPollFn
-func tcpPollFn(arg unsafe.Pointer, tpcb *C.struct_tcp_pcb) C.err_t {
-	var conn = (*tcpConn)(arg)
-
-	err := conn.Poll()
-	switch err.(*lwipError).Code {
-	case LWIP_ERR_ABRT:
-		return C.ERR_ABRT
-	case LWIP_ERR_OK:
-		return C.ERR_OK
-	default:
-		panic("unexpected error")
-	}
-
-}
