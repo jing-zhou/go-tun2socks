@@ -134,6 +134,10 @@ func newTCPConn(pcb *C.struct_tcp_pcb, handler TCPConnHandler) (TCPConn, error) 
 			conn.Abort()
 		} else {
 			conn.Lock()
+			if conn.state != tcpConnecting {
+				conn.Unlock()
+				return
+			}
 			conn.state = tcpConnected
 			conn.Unlock()
 		}
@@ -172,11 +176,11 @@ func (conn *tcpConn) receiveCheck() error {
 	case tcpNewConn:
 		fallthrough
 	case tcpConnecting:
-		fallthrough
+		return NewLWIPError(LWIP_ERR_CONN)
 	case tcpAborting:
 		fallthrough
 	case tcpClosed:
-		return NewLWIPError(LWIP_ERR_CONN)
+		fallthrough
 	case tcpReceiveClosed:
 		fallthrough
 	case tcpClosing:
