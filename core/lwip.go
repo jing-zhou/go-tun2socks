@@ -5,6 +5,38 @@ package core
 #include "lwip/tcp.h"
 #include "lwip/udp.h"
 #include "lwip/timeouts.h"
+
+err_t
+tcp_bind_cgo(struct tcp_pcb *pcb, _Bool enableIPv6, _Bool allowLan)
+{
+	if (allowLan) {
+		return tcp_bind(pcb, IP_ADDR_ANY, 0);
+	}
+	ip_addr_t bindAddr = IPADDR_ANY_TYPE_INIT;
+	if (enableIPv6) {
+		IP_ADDR6(&bindAddr, 0, 0, 0, 0x00000001UL);
+	} else {
+		IP_ADDR4(&bindAddr, 127, 0, 0, 1);
+	}
+
+	return tcp_bind(pcb, &bindAddr, 0);
+}
+
+err_t
+udp_bind_cgo(struct udp_pcb *pcb, _Bool enableIPv6, _Bool allowLan)
+{
+	if (allowLan) {
+		return udp_bind(pcb, IP_ADDR_ANY, 0);
+	}
+	ip_addr_t bindAddr = IPADDR_ANY_TYPE_INIT;
+	if (enableIPv6) {
+		IP_ADDR6(&bindAddr, 0, 0, 0, 0x00000001UL);
+	} else {
+		IP_ADDR4(&bindAddr, 127, 0, 0, 1);
+	}
+
+	return udp_bind(pcb, &bindAddr, 0);
+}
 */
 import "C"
 import (
@@ -53,11 +85,12 @@ const (
 	RUNNING int32 = 1
 )
 
-func lwipStackSetupInternal(enableIPv6 bool) *lwipStack {
+func lwipStackSetupInternal(enableIPv6 bool, allowLan bool) *lwipStack {
 	lwipMutex.Lock()
 	defer lwipMutex.Unlock()
 	var tcpPCB *C.struct_tcp_pcb
 	var udpPCB *C.struct_udp_pcb
+	var err C.err_t
 
 	if enableIPv6 {
 		tcpPCB = C.tcp_new_ip_type(C.IPADDR_TYPE_ANY)
@@ -69,7 +102,7 @@ func lwipStackSetupInternal(enableIPv6 bool) *lwipStack {
 		log.Fatalf("tcp_new return nil")
 	}
 
-	err := C.tcp_bind(tcpPCB, C.IP_ADDR_ANY, 0)
+	err = C.tcp_bind_cgo(tcpPCB, C._Bool(enableIPv6), C._Bool(allowLan))
 
 	switch err {
 	case C.ERR_OK:
@@ -99,7 +132,8 @@ func lwipStackSetupInternal(enableIPv6 bool) *lwipStack {
 		log.Fatalf("could not allocate udp pcb")
 	}
 
-	err = C.udp_bind(udpPCB, C.IP_ADDR_ANY, 0)
+	err = C.udp_bind_cgo(udpPCB, C._Bool(enableIPv6), C._Bool(allowLan))
+
 	if err != C.ERR_OK {
 		log.Fatalf("address already in use")
 	}
@@ -118,8 +152,8 @@ func lwipStackSetupInternal(enableIPv6 bool) *lwipStack {
 // NewLWIPStack listens for any incoming connections/packets and registers
 // corresponding accept/recv callback functions.
 // The timeout check goroutine is NOT started
-func NewLWIPStack(enableIPv6 bool) LWIPStack {
-	stack := lwipStackSetupInternal(enableIPv6)
+func NewLWIPStack(enableIPv6 bool, allowLan bool) LWIPStack {
+	stack := lwipStackSetupInternal(enableIPv6, allowLan)
 	atomic.StoreInt32(stack.IsRunning, RUNNING)
 	stack.StartTimeouts()
 	return stack
