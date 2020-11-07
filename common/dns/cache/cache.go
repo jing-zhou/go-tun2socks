@@ -44,19 +44,19 @@ func (c *simpleDnsCache) Query(payload []byte) ([]byte, error) {
 		return nil, e
 	}
 	if len(request.Question) == 0 {
-		return nil, errors.New("request.Question is empty")
+		return nil, errors.New("simpleDnsCache: request.Question is empty")
 	}
 
 	key := cacheKey(request.Question[0])
 	entryInterface := c.storage.Get(key)
 	if entryInterface == nil {
-		log.Debugf("no entry found in DnsCache, key: %v", key)
+		log.Debugf("simpleDnsCache: no entry found in DnsCache, key: %v", key)
 		// not an error
 		return nil, nil
 	}
 	entry := entryInterface.(*dnsCacheEntry)
 	if entry == nil {
-		return nil, errors.New("nil pointer in DnsCache entry")
+		return nil, errors.New("simpleDnsCache: nil pointer in DnsCache entry")
 	}
 
 	resp := new(dns.Msg)
@@ -67,7 +67,7 @@ func (c *simpleDnsCache) Query(payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("got dns answer from cache with key: %v", key)
+	log.Debugf("simpleDnsCache: got dns answer from cache with key: %v", key)
 	return append([]byte(nil), dnsAnswer...), nil
 }
 
@@ -78,10 +78,10 @@ func (c *simpleDnsCache) Store(payload []byte) error {
 		return e
 	}
 	if resp.Rcode != dns.RcodeSuccess {
-		return errors.New(fmt.Sprintf("resp.Rcode not RcodeSuccess: DNS resp is: %v", resp.String()))
+		return errors.New(fmt.Sprintf("simpleDnsCache: resp.Rcode not RcodeSuccess: DNS resp is: %v", resp.String()))
 	}
 	if len(resp.Question) == 0 || len(resp.Answer) == 0 {
-		return errors.New("resp.Question or resp.Answer is empty")
+		return errors.New("simpleDnsCache: resp.Question or resp.Answer is empty")
 	}
 
 	key := cacheKey(resp.Question[0])
@@ -91,6 +91,6 @@ func (c *simpleDnsCache) Store(payload []byte) error {
 	}
 	c.storage.Put(key, value, time.Duration(ttl)*time.Second)
 
-	log.Debugf("stored dns answer with key: %v, ttl: %v sec", key, ttl)
+	log.Debugf("simpleDnsCache: stored dns answer with key: %v, ttl: %v sec", key, ttl)
 	return nil
 }
