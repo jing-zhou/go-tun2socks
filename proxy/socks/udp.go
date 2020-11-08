@@ -19,8 +19,6 @@ import (
 // max IP packet size - min IP header size - min UDP header size - min SOCKS5 header size
 const maxUdpPayloadSize = 65535 - 20 - 8 - 7
 
-const INVALID_CONNKEY_STR string = "INVALID_CONNKEY_STR"
-
 var (
 	udpAssocTable = &sync.Map{}
 	udpConnTable  = &sync.Map{}
@@ -56,11 +54,11 @@ func NewUDPHandler(proxyHost string, proxyPort uint16, timeout time.Duration, dn
 func (h *udpHandler) handleTCP(conn core.UDPConn, c net.Conn) {
 	buf := pool.NewBytes(pool.BufSize)
 	defer pool.FreeBytes(buf)
-	defer h.invalidateUDPAssociation(conn)
+	defer h.Close(conn)
 
 	for {
-		// Don't timeout
-		c.SetDeadline(time.Time{})
+		// Initial timeout
+		c.SetDeadline(time.Now().Add(30 * time.Minute))
 		_, err := io.CopyBuffer(ioutil.Discard, c, buf)
 		if err == io.EOF {
 			log.Infof("UDP associate to %v closed by remote", c.RemoteAddr())
@@ -80,7 +78,7 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, input net.PacketConn) {
 
 	defer func(conn core.UDPConn, buf []byte) {
 		pool.FreeBytes(buf)
-		h.Close(conn)
+		h.shutdownUDPConn(conn)
 	}(conn, buf)
 
 	for {
@@ -114,7 +112,6 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, input net.PacketConn) {
 		if h.dnsCache != nil {
 			var port string
 			var portnum uint64
-			log.Warnf("fetchUDPInput: addrStr %v", addrStr)
 			_, port, err = net.SplitHostPort(addrStr)
 			if err != nil {
 				log.Warnf("fetchUDPInput: SplitHostPort failed with %v", err)
@@ -126,7 +123,7 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, input net.PacketConn) {
 				return
 			}
 			if portnum == uint64(dns.COMMON_DNS_PORT) {
-				log.Infof("fetchUDPInput: dnsCache not nil, got COMMON_DNS_PORT, start Store...")
+				log.Infof("fetchUDPInput: dnsCache not nil, got COMMON_DNS_PORT, Store addrStr %v", addrStr)
 				err = h.dnsCache.Store(buf[payloadPos:bytesRead])
 				if err != nil {
 					log.Warnf("fetchUDPInput: fail to store in DnsCache: %v", err)
@@ -164,11 +161,13 @@ func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 	targetHost := target.IP.String()
 	if h.fakeDns != nil {
 		if target.Port == dns.COMMON_DNS_PORT {
-			log.Infof("Connect: got DNS packet, continue Connect() for UDP assoc")
-			//return nil
-		}
-		if h.fakeDns.IsFakeIP(target.IP) {
-			targetHost = h.fakeDns.QueryDomain(target.IP)
+			if h.fakeDns.IsFakeIP(target.IP) {
+				log.Infof("Connect: got DNS packet for FakeDNS, continue Connect() for UDP assoc")
+				targetHost = h.fakeDns.QueryDomain(target.IP)
+			} else {
+				log.Infof("Connect: got general DNS packet, skip Connect()")
+				return nil
+			}
 		}
 	}
 	dest := net.JoinHostPort(targetHost, strconv.Itoa(target.Port))
@@ -177,7 +176,7 @@ func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 
 }
 
-func (h *udpHandler) doUDPAssociationAndStartUDP(conn core.UDPConn, dest string) error {
+func (h *udpHandler) doUDPAssociation(conn core.UDPConn, dest string) error {
 	var err error
 	_, isExist := h.isUDPAssociationExist(conn)
 	if !isExist {
@@ -187,6 +186,14 @@ func (h *udpHandler) doUDPAssociationAndStartUDP(conn core.UDPConn, dest string)
 		}
 	}
 
+	return err
+}
+
+func (h *udpHandler) doUDPAssociationAndStartUDP(conn core.UDPConn, dest string) error {
+	err := h.doUDPAssociation(conn, dest)
+	if err != nil {
+		return err
+	}
 	return h.startHandleUDP(conn)
 }
 
@@ -261,8 +268,7 @@ func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr
 	// special case: DNS packet
 	if addr.Port == dns.COMMON_DNS_PORT {
 		if h.dnsCache != nil {
-			// fetch from dns cache first
-			log.Infof("ReceiveTo: got COMMON_DNS_PORT, fetch from dns cache first")
+			log.Infof("ReceiveTo: got COMMON_DNS_PORT, fetch from dns cache")
 			var answer []byte
 			answer, err = h.dnsCache.Query(data)
 			if err != nil {
@@ -275,31 +281,33 @@ func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr
 					err = errors.New(fmt.Sprintf("write dns answer failed: %v", err))
 					return err
 				}
+				h.shutdownUDPConn(conn)
 				return nil
 			}
 		}
-
 		if h.fakeDns != nil {
-			log.Infof("ReceiveTo: dns cache miss, do the query")
+			log.Infof("ReceiveTo: intercept general DNS request, do FakeDNS query")
 			var resp []byte
 			resp, err = h.fakeDns.GenerateFakeResponse(data)
 			if err != nil {
 				log.Warnf("ReceiveTo: fakeDns GenerateFakeResponse fail %v", err)
-				if err = h.Connect(conn, addr); err != nil {
+				log.Infof("ReceiveTo: intercept general DNS request, doUDPAssociationAndStartUDP")
+				if err = h.doUDPAssociationAndStartUDP(conn, addr.String()); err != nil {
 					err = fmt.Errorf("failed to connect to %v:%v", addr.Network(), addr.String())
 					return err
 				}
+				// already got UDP association, continue the following procedure
 			} else {
-				log.Infof("ReceiveTo: fakeDns GenerateFakeResponse success, start WriteFrom...")
+				log.Infof("ReceiveTo: fakeDns GenerateFakeResponse success, WriteFrom addr %v", addr)
 				_, err = conn.WriteFrom(resp, addr)
 				if err != nil {
 					err = errors.New(fmt.Sprintf("write dns answer failed: %v", err))
 					return err
 				}
+				h.shutdownUDPConn(conn)
 				return nil
 			}
 		}
-
 	}
 
 	if udpConnEnt, ok1 := udpConnTable.Load(connKey); ok1 {
@@ -333,10 +341,15 @@ func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr
 		return err
 	}
 	return err
-
 }
 
+// Close do a full close
 func (h *udpHandler) Close(conn core.UDPConn) {
+	h.shutdownUDPConn(conn)
+	h.invalidateUDPAssociation(conn)
+}
+
+func (h *udpHandler) shutdownUDPConn(conn core.UDPConn) {
 	connKey := h.getConnKey(conn)
 	conn.Close()
 	if ent, ok := udpConnTable.Load(connKey); ok {
@@ -364,6 +377,13 @@ func (h *udpHandler) isUDPAssociationExist(conn core.UDPConn) (entry *udpAssocTa
 	connKey := h.getConnKey(conn)
 	ent, ok := udpAssocTable.Load(connKey)
 	if ok {
+		// each success check means we have valid UDP packet, we extend the udpAssocTable timeout
+		c := ent.(*udpAssocTableEntry).tcpConn
+		err := c.SetDeadline(time.Now().Add(5 * time.Second))
+		if err != nil {
+			// seems to be invalid this time
+			return nil, false
+		}
 		return ent.(*udpAssocTableEntry), ok
 	} else {
 		return nil, ok
