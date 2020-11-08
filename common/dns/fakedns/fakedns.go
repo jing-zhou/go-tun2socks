@@ -75,7 +75,7 @@ func (f *fakeDNS) GenerateFakeResponse(request []byte) ([]byte, error) {
 	qtype := req.Question[0].Qtype
 	fqdn := req.Question[0].Name
 	domain := fqdn[:len(fqdn)-1]
-	ip := f.fakePool.Lookup(domain)
+	ip := f.fakePool.Lookup(domain) // fakeIP uses IPv4 range
 	log.Debugf("fake dns allocated ip %v for domain %v", ip, domain)
 	resp := new(dns.Msg)
 	resp = resp.SetReply(req)
@@ -91,6 +91,8 @@ func (f *fakeDNS) GenerateFakeResponse(request []byte) ([]byte, error) {
 			A: ip,
 		})
 	} else if qtype == dns.TypeAAAA {
+		// use valid IPv6 form for resp.PackBuffer()
+		ipMappedTov6 := net.ParseIP("::ffff:" + ip.String())
 		resp.Answer = append(resp.Answer, &dns.AAAA{
 			Hdr: dns.RR_Header{
 				Name:     fqdn,
@@ -99,16 +101,16 @@ func (f *fakeDNS) GenerateFakeResponse(request []byte) ([]byte, error) {
 				Ttl:      FakeResponseTtl,
 				Rdlength: net.IPv6len,
 			},
-			AAAA: ip,
+			AAAA: ipMappedTov6,
 		})
 	} else {
 		return nil, fmt.Errorf("unexcepted dns qtype %v", qtype)
 	}
-	buf := pool.NewBytes(pool.BufSize)
+	buf := pool.NewBytes(65535)
 	defer pool.FreeBytes(buf)
 	dnsAnswer, err := resp.PackBuffer(buf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack dns answer: %v", err)
+		return nil, fmt.Errorf("failed to pack dns answer: %v, err %v", resp.String(), err)
 	}
 	return append([]byte(nil), dnsAnswer...), nil
 }
