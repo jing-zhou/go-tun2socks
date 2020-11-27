@@ -161,13 +161,12 @@ func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 	targetHost := target.IP.String()
 	if h.fakeDns != nil {
 		if target.Port == dns.COMMON_DNS_PORT {
-			if h.fakeDns.IsFakeIP(target.IP) {
-				log.Infof("Connect: got DNS packet for FakeDNS, continue Connect() for UDP assoc")
-				targetHost = h.fakeDns.QueryDomain(target.IP)
-			} else {
-				log.Infof("Connect: got general DNS packet, skip Connect()")
-				return nil
-			}
+			log.Infof("Connect: got general DNS packet, skip Connect()")
+			return nil
+		}
+		if h.fakeDns.IsFakeIP(target.IP) {
+			log.Infof("Connect: got FakeIP")
+			targetHost = h.fakeDns.QueryDomain(target.IP)
 		}
 	}
 	dest := net.JoinHostPort(targetHost, strconv.Itoa(target.Port))
