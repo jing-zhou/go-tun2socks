@@ -34,7 +34,7 @@ func NewSimpleDnsCache() cdns.DnsCache {
 func packUint16(i uint16) []byte { return []byte{byte(i >> 8), byte(i)} }
 
 func cacheKey(q dns.Question) string {
-	return string(append([]byte(q.Name), packUint16(q.Qtype)...))
+	return q.String()
 }
 
 func (c *simpleDnsCache) Query(payload []byte) ([]byte, error) {
