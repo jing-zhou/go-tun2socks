@@ -16,6 +16,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"unsafe"
+
+	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
 type ipver byte
@@ -96,7 +98,8 @@ func input(pkt []byte) (int, error) {
 	singleCopyLen := 0
 
 	var buf *C.struct_pbuf
-	var ierr C.err_t
+	var newBuf *C.struct_pbuf
+	var ierr C.err_t = C.ERR_ARG // initial value to free pbuf if errors occur
 
 	// TODO Copy the data only when lwip need to keep it, e.g. in
 	// case we are returning ERR_CONN in tcpRecvFn.
@@ -109,33 +112,43 @@ func input(pkt []byte) (int, error) {
 	// you are unable to receive TCP acks!
 
 	buf = C.pbuf_alloc(C.PBUF_RAW, C.u16_t(pktLen), C.PBUF_POOL)
+	newBuf = buf
 	defer func(pb *C.struct_pbuf, err *C.err_t) {
 		if pb != nil && *err != C.ERR_OK {
 			lwipMutex.Lock()
-			defer lwipMutex.Unlock()
+			log.Infof("lwip Input() pbuf_free(deferred func call)")
 			C.pbuf_free(pb)
 			pb = nil
+			lwipMutex.Unlock()
 		}
-	}(buf, &ierr)
-	if buf == nil {
+	}(newBuf, &ierr)
+	if newBuf == nil {
+		log.Errorf("lwip Input() pbuf_alloc returns NULL")
 		return 0, errors.New("lwip Input() pbuf_alloc returns NULL")
 	}
 	for remaining > 0 {
-		if remaining > int(buf.tot_len) {
-			singleCopyLen = int(buf.tot_len)
+		if remaining > int(newBuf.tot_len) {
+			singleCopyLen = int(newBuf.tot_len)
 		} else {
 			singleCopyLen = remaining
 		}
-		r := C.pbuf_take_at(buf, unsafe.Pointer(&pkt[startPos]), C.u16_t(singleCopyLen), C.u16_t(startPos))
+		r := C.pbuf_take_at(newBuf, unsafe.Pointer(&pkt[startPos]), C.u16_t(singleCopyLen), C.u16_t(startPos))
 		if r == C.ERR_MEM {
-			panic("Input pbuf_take_at this should not happen")
+			log.Errorf("Input pbuf_take_at this should not happen")
+			return 0, errors.New("Input pbuf_take_at this should not happen")
 		}
 		startPos += singleCopyLen
 		remaining -= singleCopyLen
 	}
+	newBuf = C.pbuf_coalesce(buf, C.PBUF_RAW)
+	if newBuf.next != nil {
+		log.Errorf("lwip Input() pbuf_coalesce failed")
+		return 0, errors.New("lwip Input() pbuf_coalesce failed")
+	}
 
-	ierr = C.input(buf)
+	ierr = C.input(newBuf)
 	if ierr != C.ERR_OK {
+		log.Errorf("lwip Input() fail to input packet, packet not handled")
 		return 0, errors.New("packet not handled")
 	}
 	return pktLen, nil
