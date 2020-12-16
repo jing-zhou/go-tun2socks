@@ -266,7 +266,11 @@ func (s *lwipStack) GetRunningStatus() bool {
 // Write writes IP packets to the stack.
 func (s *lwipStack) Write(data []byte) (int, error) {
 	if s.GetRunningStatus() {
-		return input(data)
+		n, err := input(data)
+		if err != nil {
+			log.Errorf("lwip input err: %v", err)
+		}
+		return n, err
 	} else {
 		return 0, errors.New("stack closed")
 	}
