@@ -27,7 +27,9 @@ func tcpAcceptFn(arg unsafe.Pointer, newpcb *C.struct_tcp_pcb, err C.err_t) C.er
 	}
 
 	if tcpConnHandler == nil {
-		panic("must register a TCP connection handler")
+		log.Printf("must register a TCP connection handler")
+		C.tcp_abort(newpcb)
+		return C.ERR_ABRT
 	}
 
 	if _, nerr := newTCPConn(newpcb, tcpConnHandler); nerr != nil {
@@ -81,7 +83,9 @@ func tcpRecvFn(arg unsafe.Pointer, tpcb *C.struct_tcp_pcb, p *C.struct_pbuf, pas
 			shouldFreePbuf = true
 			return C.ERR_OK
 		default:
-			panic("unexpected error")
+			log.Printf("unexpected error conn.LocalClosed() %v", err.(*lwipError).Error())
+			shouldFreePbuf = true
+			return C.ERR_OK
 		}
 	}
 
@@ -116,7 +120,9 @@ func tcpRecvFn(arg unsafe.Pointer, tpcb *C.struct_tcp_pcb, p *C.struct_pbuf, pas
 			C.tcp_shutdown(tpcb, 1, 0)
 			return C.ERR_OK
 		default:
-			panic("unexpected error")
+			log.Printf("unexpected error conn.Receive() %v", rerr.(*lwipError).Error())
+			shouldFreePbuf = true
+			return C.ERR_OK
 		}
 	}
 
@@ -135,7 +141,8 @@ func tcpSentFn(arg unsafe.Pointer, tpcb *C.struct_tcp_pcb, len C.u16_t) C.err_t 
 	case LWIP_ERR_OK:
 		return C.ERR_OK
 	default:
-		panic("unexpected error")
+		log.Printf("unexpected error conn.Sent() %v", err.(*lwipError).Error())
+		panic("unexpected error conn.Sent()")
 	}
 
 }
