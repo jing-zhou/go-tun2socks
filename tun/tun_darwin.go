@@ -33,6 +33,9 @@ func isIPv6(ip net.IP) bool {
 func OpenTunDevice(name, addr, gw, mask string, dnsServers []string, persist bool) (io.ReadWriteCloser, error) {
 	tunDev, err := water.New(water.Config{
 		DeviceType: water.TUN,
+		PlatformSpecificParams: water.PlatformSpecificParams{
+			Name: name,
+		},
 	})
 	if err != nil {
 		return nil, err
