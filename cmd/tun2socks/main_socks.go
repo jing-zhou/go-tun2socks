@@ -1,3 +1,4 @@
+//go:build socks
 // +build socks
 
 package main
@@ -5,9 +6,9 @@ package main
 import (
 	"net"
 
-	"github.com/eycorsican/go-tun2socks/common/log"
-	"github.com/eycorsican/go-tun2socks/core"
-	"github.com/eycorsican/go-tun2socks/proxy/socks"
+	"github.com/jing-zhou/go-tun2socks/common/log"
+	"github.com/jing-zhou/go-tun2socks/core"
+	"github.com/jing-zhou/go-tun2socks/proxy/socks"
 )
 
 func init() {
