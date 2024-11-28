@@ -45,9 +45,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/eycorsican/go-tun2socks/common/log"
-	syncex "github.com/eycorsican/go-tun2socks/component/go-syncex"
-	"github.com/eycorsican/go-tun2socks/component/runner"
+	"github.com/jing-zhou/go-tun2socks/common/log"
+	syncex "github.com/jing-zhou/go-tun2socks/component/go-syncex"
+	"github.com/jing-zhou/go-tun2socks/component/runner"
 )
 
 const CHECK_TIMEOUTS_INTERVAL = 250 // in millisecond

@@ -3,7 +3,7 @@ package simple
 import (
 	golog "log"
 
-	"github.com/eycorsican/go-tun2socks/common/log"
+	"github.com/jing-zhou/go-tun2socks/common/log"
 )
 
 type simpleLogger struct {

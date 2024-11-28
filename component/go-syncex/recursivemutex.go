@@ -1,8 +1,9 @@
 package syncex
 
 import (
-	hackgid "github.com/eycorsican/go-tun2socks/component/gls"
 	"sync"
+
+	hackgid "github.com/jing-zhou/go-tun2socks/component/gls"
 )
 
 // A RecursiveMutex is particular type of mutual exclusion (mutex) that

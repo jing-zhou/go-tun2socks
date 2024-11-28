@@ -17,7 +17,7 @@ import (
 	"errors"
 	"unsafe"
 
-	"github.com/eycorsican/go-tun2socks/common/log"
+	"github.com/jing-zhou/go-tun2socks/common/log"
 )
 
 type ipver byte

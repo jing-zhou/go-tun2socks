@@ -6,8 +6,9 @@ package core
 */
 import "C"
 import (
-	"github.com/eycorsican/go-tun2socks/component/pool"
 	"unsafe"
+
+	"github.com/jing-zhou/go-tun2socks/component/pool"
 )
 
 //export output

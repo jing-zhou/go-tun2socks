@@ -15,8 +15,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
-	//"github.com/eycorsican/go-tun2socks/common/log"
-	syncex "github.com/eycorsican/go-tun2socks/component/go-syncex"
+
+	//"github.com/jing-zhou/go-tun2socks/common/log"
+	syncex "github.com/jing-zhou/go-tun2socks/component/go-syncex"
 )
 
 // lwIP runs in a single thread, locking is needed in Go runtime.
@@ -71,6 +72,7 @@ func (m *MutexWrapper) Unlock( /*params ...bool*/ ) {
 
 // ipaddr_ntoa() is using a global static buffer to return result,
 // reentrants are not allowed, caller is required to lock lwipMutex.
+//
 //export ipAddrNTOA
 func ipAddrNTOA(ipaddr C.struct_ip_addr) string {
 	lwipMutex.Lock()

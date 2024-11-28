@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eycorsican/go-tun2socks/common/dns"
-	"github.com/eycorsican/go-tun2socks/common/log"
-	"github.com/eycorsican/go-tun2socks/component/pool"
-	"github.com/eycorsican/go-tun2socks/core"
+	"github.com/jing-zhou/go-tun2socks/common/dns"
+	"github.com/jing-zhou/go-tun2socks/common/log"
+	"github.com/jing-zhou/go-tun2socks/component/pool"
+	"github.com/jing-zhou/go-tun2socks/core"
 )
 
 // max IP packet size - min IP header size - min UDP header size - min SOCKS5 header size

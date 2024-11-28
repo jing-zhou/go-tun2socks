@@ -5,8 +5,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/eycorsican/go-tun2socks/component/trie"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/jing-zhou/go-tun2socks/component/trie"
 )
 
 // Pool is a implementation about fake ip generator without storage
