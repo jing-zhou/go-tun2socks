@@ -1,3 +1,3 @@
-module github.com/trojan-gfw/go-tun2socks
+module github.com/jing-zhou/go-tun2socks
 
-go 1.14
+go 1.23
