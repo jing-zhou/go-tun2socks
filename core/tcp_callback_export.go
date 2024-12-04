@@ -11,7 +11,7 @@ import (
 	"log"
 	"unsafe"
 
-	"github.com/eycorsican/go-tun2socks/component/pool"
+	"github.com/jing-zhou/go-tun2socks/component/pool"
 )
 
 // These exported callback functions must be placed in a seperated file.
